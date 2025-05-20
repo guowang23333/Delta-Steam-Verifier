@@ -1,0 +1,121 @@
+{
+    "__comment__steam_section": "Steam客户端相关配置",
+    "steam": {
+        "__comment__path": "Steam客户端安装路径（注意使用双反斜杠）",
+        "path": "C:\\Program Files (x86)\\Steam\\steam.exe",
+        
+        "__comment__game_id": "游戏在Steam的App ID（需从SteamDB获取）",
+        "game_id": "2507950",
+        
+        "__comment__process_name": "游戏主进程名称（需与任务管理器中的名称完全一致）",
+        "process_name": "df_launcher.exe",
+        
+        "__comment__child_processes": "需要监控/终止的子进程列表（游戏相关进程）",
+        "child_processes": ["DeltaForceClient-Win64-Shipping.exe"]
+    },
+
+    "__comment__ocr_section": "OCR识别相关配置",
+    "ocr": {
+        "__comment__tesseract_path": "Tesseract-OCR引擎的安装路径",
+        "tesseract_path": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+        
+        "__comment__screenshot_region": "封禁信息截图区域坐标（x1,y1,x2,y2）",
+        "screenshot_region": [100, 200, 500, 300]
+    },
+
+    "__comment__paths_section": "路径配置（所有路径基于项目根目录）",
+    "paths": {
+        "__comment__screenshots": "封禁截图保存目录",
+        "screenshots": "screenshots",
+        
+        "__comment__debug": "调试截图保存目录",
+        "debug": "debug",
+        
+        "__comment__button_images": "按钮截图存放目录",
+        "button_images": "images"
+    },
+
+    "__comment__timing_section": "时间控制参数（单位：秒）",
+    "timing": {
+        "__comment__login_delay": "Steam登录后的基础等待时间",
+        "login_delay": 15,
+        
+        "__comment__process_check": "进程监控配置",
+        "process_check": {
+            "__comment__timeout": "进程启动最大等待时间",
+            "timeout": 120,
+            "__comment__interval": "进程检查间隔",
+            "interval": 5
+        },
+        
+        "__comment__agreement": "用户协议界面识别配置",
+        "agreement": {
+            "__comment__search_time": "单次搜索最大耗时",
+            "search_time": 3,
+            "__comment__confidence": "图像匹配置信度阈值（0-1）",
+            "confidence": 0.85
+        },
+        
+        "__comment__delays": "各种操作延迟配置（最小,最大）",
+        "delays": {
+            "__comment__random": "通用随机延迟",
+            "random": [2, 5],
+            "__comment__post_login": "登录后的等待时间",
+            "post_login": [3, 7],
+            "__comment__post_click": "点击操作后的延迟",
+            "post_click": [0.5, 1.2],
+            "__comment__game_loading": "游戏加载等待时间",
+            "game_loading": [10, 15]
+        },
+        
+        "__comment__final_validation": "最终验证阶段配置",
+        "final_validation": {
+            "__comment__delay_range": "最终状态检查前的等待时间范围",
+            "delay_range": [20, 25]
+        }
+    },
+
+    "__comment__buttons_section": "按钮识别配置",
+    "buttons": {
+        "__comment__eula_agree": "用户协议同意按钮截图文件名",
+        "eula_agree": "eula_agree.png",
+        "__comment__start_game": "开始游戏按钮截图文件名",
+        "start_game": "start_button.png",
+        "__comment__agreement": "二次协议确认按钮截图文件名",
+        "agreement": "agree_button.png",
+        
+        "__comment__config": "按钮操作配置",
+        "config": {
+            "__comment__start_game": "开始游戏按钮配置",
+            "start_game": {
+                "__comment__timeout": "识别超时时间（秒）",
+                "timeout": 60,
+                "__comment__retries": "最大重试次数",
+                "retries": 3,
+                "__comment__post_delay": "点击后的随机延迟",
+                "post_delay": [2, 3]
+            },
+            "__comment__agreement": "协议确认按钮配置",
+            "agreement": {
+                "__comment__timeout": "识别超时时间（秒）",
+                "timeout": 20,
+                "__comment__retries": "最大重试次数",
+                "retries": 2,
+                "__comment__post_delay": "点击后的随机延迟",
+                "post_delay": [2, 3],
+                "__comment__optional": "是否为可选步骤",
+                "optional": true
+            }
+        }
+    },
+
+    "__comment__accounts_section": "账号列表（建议使用环境变量加密敏感信息）",
+    "accounts": [
+        {
+            "__comment__username": "Steam账号",
+            "username": "",
+            "__comment__password": "Steam密码",
+            "password": ""
+        }
+    ]
+}
