@@ -12,6 +12,15 @@ from PIL import ImageGrab
 from datetime import datetime
 from config_loader import config
 
+# UI 可注入日志回调，默认直接 print
+_log_callback = None
+
+def log(msg: str):
+    if _log_callback:
+        _log_callback(msg)
+    else:
+        print(msg)
+
 
 # ---------------------------
 # 初始化配置
@@ -20,15 +29,10 @@ def check_tesseract():
     """Tesseract环境验证"""
     try:
         pytesseract.get_tesseract_version()
-        print("Tesseract-OCR 环境验证通过")
+        log("Tesseract-OCR 环境验证通过")
         return True
     except pytesseract.TesseractNotFoundError:
-        print(f"""
-        [!] Tesseract-OCR未正确配置，请检查：
-            1. 是否完成安装
-            2. 路径配置是否正确：{config.get("ocr", "tesseract_path")}
-            3. 是否重启了计算机
-        """)
+        log("[!] Tesseract-OCR未正确配置，请确认 Tesseract-OCR 目录存在于程序同级目录")
         return False
 
 
@@ -41,6 +45,8 @@ def is_process_running(process_name: str) -> bool:
         if proc.info['name'].lower() == process_name.lower():
             return True
     return False
+
+
 # ---------------------------
 # 核心功能
 # ---------------------------
@@ -50,9 +56,9 @@ def kill_process(process_name):
         if proc.info['name'].lower() == process_name.lower():
             try:
                 proc.kill()
-                print(f"已终止进程: {process_name}")
+                log(f"已终止进程: {process_name}")
             except Exception as e:
-                print(f"终止进程失败: {e}")
+                log(f"终止进程失败: {e}")
 
 def random_delay():
     """随机延迟防止检测"""
@@ -70,7 +76,7 @@ def login_steam(username, password):
         # 通过命令行登录
         cmd = [config.get("steam", "path"), "-login", username, password]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"[{datetime.now()}] 正在登录账户: {username}")
+        log(f"[{datetime.now()}] 正在登录账户: {username}")
 
         # 等待登录完成
         time.sleep(config.get("timing", "login_delay"))
@@ -80,12 +86,12 @@ def login_steam(username, password):
             raise Exception("Steam客户端启动失败")
             
     except Exception as e:
-        print(f"登录失败: {str(e)}")
+        log(f"登录失败: {str(e)}")
         raise
 
 def handle_eula_agreement():
     """处理用户协议界面"""
-    print(">> 正在检测用户协议界面...")
+    log(">> 正在检测用户协议界面...")
     try:
         # 构建按钮路径
         btn_path = os.path.join(
@@ -107,35 +113,17 @@ def handle_eula_agreement():
             move_duration = random.uniform(*config.get("timing", "delays", "post_click"))
             pyautogui.moveTo(x, y, duration=move_duration)
             pyautogui.click()
-            print("<< 成功点击协议同意按钮")
+            log("<< 成功点击协议同意按钮")
             return True
         
-        print("未检测到协议界面")
+        log("未检测到协议界面")
         return False
 
     except pyautogui.ImageNotFoundException:
-        print("-- 全屏未找到协议按钮")
+        log("-- 全屏未找到协议按钮")
         return False
     except Exception as e:
-        print(f"协议检测异常: {str(e)}")
-        return False
-
-def validate_screenshot_size(img_path):
-    """验证截图尺寸有效性"""
-    from PIL import Image
-    try:
-        screen_w, screen_h = pyautogui.size()
-        img = Image.open(img_path)
-        
-        # 验证规则：不超过屏幕尺寸的1/4
-        max_w = screen_w // 4
-        max_h = screen_h // 4
-        if img.width > max_w or img.height > max_h:
-            print(f"截图尺寸过大（{img.width}x{img.height}），建议重新截取")
-            return False
-        return True
-    except Exception as e:
-        print(f"截图验证失败: {str(e)}")
+        log(f"协议检测异常: {str(e)}")
         return False
 
 def launch_game():
@@ -165,51 +153,54 @@ def launch_game():
             "-applaunch",
             config.get("steam", "game_id")
         ])
-        print(f"[{datetime.now()}] 游戏启动命令已发送")
+        log(f"[{datetime.now()}] 游戏启动命令已发送")
 
         # 进程监控
-        game_started = False
-        start_time = time.time()
         process_cfg = config.get("timing", "process_check")
-        
-        max_attempts = 3  # 最大检测次数
-        attempt = 0       # 当前尝试次数
+        max_attempts = 3
+        attempt = 0
         game_started = False
+        timeout = process_cfg["timeout"]
+        start_time = time.time()
 
-        while time.time() - start_time < process_cfg["timeout"]:
+        while time.time() - start_time < timeout:
+            # 检查游戏进程是否已启动
             if any(p.info['name'].lower() == config.get("steam", "process_name").lower()
-                for p in psutil.process_iter(['name'])):
+                    for p in psutil.process_iter(['name'])):
                 game_started = True
                 break
             
             attempt += 1
-            print(f"等待游戏进程启动...（尝试 {attempt}/{max_attempts}）")
+            log(f"等待游戏进程启动...（尝试 {attempt}/{max_attempts}）")
             
             if attempt >= max_attempts:
-                print("检测到游戏进程未启动，处理协议")
+                log("检测到游戏进程未启动，处理协议")
                 # 处理用户协议
                 agreement_handled = handle_eula_agreement()
-                print(f"协议处理状态: {'成功' if agreement_handled else '未检测到'}")
-                break
+                log(f"协议处理状态: {'成功' if agreement_handled else '未检测到'}")
+                
+                # 协议处理后重置计数器并继续检测
+                attempt = 0
+                max_attempts = process_cfg.get("post_agreement_attempts", 5)  # 协议处理后的额外尝试次数
+                log("协议处理完成，继续等待游戏进程启动...")
+                continue
             
             time.sleep(process_cfg["interval"])
 
         if not game_started:
-            raise Exception(f"进程启动超时（{process_cfg['timeout']}秒）")
+            raise Exception(f"进程启动超时（{timeout}秒）")
 
-        print("游戏进程启动成功")
+        log("游戏进程启动成功")
         time.sleep(random.uniform(*config.get("timing", "delays", "game_loading")))
-
-
 
         # 智能点击流程
         def smart_click(btn_type):
             cfg = button_config[btn_type]
-            print(f"[{btn_type}] 最大重试次数: {cfg['retries']}")
+            log(f"[{btn_type}] 最大重试次数: {cfg['retries']}")
             
             for attempt in range(cfg["retries"]):
                 try:
-                    print(f"尝试 {attempt+1}/{cfg['retries']}")
+                    log(f"尝试 {attempt+1}/{cfg['retries']}")
                     location = pyautogui.locateOnScreen(
                         button_images[btn_type],
                         confidence=max(0.7, 0.85 - attempt*0.05),
@@ -236,30 +227,30 @@ def launch_game():
             if button_config["agreement"]["optional"]:
                 smart_click("agreement")
         except Exception as e:
-            print(f"可选步骤跳过: {str(e)}")
+            log(f"可选步骤跳过: {str(e)}")
 
         # 最终验证
-        print("验证游戏状态...")
+        log("验证游戏状态...")
         delay_min, delay_max = config.get("timing", "final_validation", "delay_range")
         validation_delay = random.uniform(delay_min, delay_max)
-        print(f"最终验证等待时长: {validation_delay:.1f}秒")
+        log(f"最终验证等待时长: {validation_delay:.1f}秒")
         time.sleep(validation_delay)
 
         if not is_process_running(config.get("steam", "process_name")):
             raise Exception(f"游戏进程 {config.get('steam', 'process_name')} 未运行")
         
-        print("游戏启动完成")
+        log("游戏启动完成")
         return True
 
     except Exception as e:
-        print(f"游戏启动失败: {str(e)}")
+        log(f"游戏启动失败: {str(e)}")
         debug_img = pyautogui.screenshot()
         debug_path = os.path.join(
             config.get("paths", "debug"),
             f"failure_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         )
         debug_img.save(debug_path)
-        print(f"调试截图已保存至: {debug_path}")
+        log(f"调试截图已保存至: {debug_path}")
         raise
 
 def capture_ban_info(username):
@@ -309,7 +300,7 @@ def capture_ban_info(username):
         return ban_status
 
     except Exception as e:
-        print(f"封禁检测异常: {str(e)}")
+        log(f"封禁检测异常: {str(e)}")
         return {
             "is_banned": False,
             "error": str(e),
@@ -325,35 +316,43 @@ def logout_steam():
         for proc in processes:
             kill_process(proc)
         
-        print("已退出当前账号")
+        log("已退出当前账号")
         time.sleep(random.uniform(5, 10))
     except Exception as e:
-        print(f"退出失败: {str(e)}")
+        log(f"退出失败: {str(e)}")
 
 def main():
-    print("售后反馈交流群1047597689")
-    print("请先看使用说明")
     """主执行流程"""
+    log("售后反馈交流群1047597689")
+    log("请先看使用说明")
     if not check_tesseract():
         return
 
-    for idx, acc in enumerate(config.get("accounts")):
-        print(f"\n{'='*40}")
-        print(f"处理账号 ({idx+1}/{len(config.get('accounts'))}): {acc['username']}")
+    try:
+        accounts = config.get("accounts")
+        if not accounts:
+            log("config.json 中没有账号")
+            return
+    except Exception as e:
+        log(f"加载账号失败: {str(e)}")
+        return
+
+    for idx, acc in enumerate(accounts):
+        log(f"\n{'='*40}")
+        log(f"处理账号 ({idx+1}/{len(accounts)}): {acc['username']}")
         
         try:
             login_steam(acc['username'], acc['password'])
             launch_game()
             
-            # 封禁检测，这里我给了15秒开游戏
             time.sleep(15)
             ban_info = capture_ban_info(acc['username'])
             
             # 记录日志
-            log_msg = f"{datetime.now()}, {acc['username']}, "
+            log_msg = f"{datetime.now()}, {acc['username']},{acc['password']}, "
             if ban_info["is_banned"]:
                 log_msg += f"封禁 | 时长:{ban_info['duration']} | 解封:{ban_info['unban_time']}"
-                print(f"!!! 封禁警报 !!! 详情: {ban_info['raw_text'][:50]}...")
+                log(f"!!! 封禁警报 !!! 详情: {ban_info['raw_text'][:50]}...")
             else:
                 log_msg += "正常"
             
@@ -361,16 +360,14 @@ def main():
                 f.write(log_msg + "\n")
                 
         except Exception as e:
-            print(f"流程异常: {str(e)}")
+            log(f"流程异常: {str(e)}")
         finally:
             logout_steam()
 
 if __name__ == "__main__":
-    # OCR初始化
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    # 构建 Tesseract 的相对路径（假设 tesseract.exe 在项目根目录的 tesseract-ocr 文件夹下）
-    tesseract_path = os.path.join(current_dir, "tesseract-ocr", "tesseract.exe")
+    tesseract_path = os.path.join(current_dir, "Tesseract-OCR", "tesseract.exe")
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
     main()
-    print("\n所有账号处理完成")
+    log("\n所有账号处理完成")
     input("输入任意字符结束")

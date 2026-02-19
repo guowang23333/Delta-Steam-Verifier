@@ -1,0 +1,12 @@
+[project]
+name = "delta-steam-verifier"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python>=4.13.0.92",
+    "openpyxl>=3.1.0",
+    "psutil>=7.2.2",
+    "pyautogui>=0.9.54",
+    "pytesseract>=0.3.13",
+]

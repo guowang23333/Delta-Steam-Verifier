@@ -1,7 +1,22 @@
 # config_loader.py
 import json
 import os
-from typing import Dict, Any, Union, List  # 添加缺失的类型导入
+import sys
+from typing import Dict, Any, Union, List
+
+
+def _base_dir() -> str:
+    """资源读取目录：打包后为 _MEIPASS，开发时为脚本目录"""
+    if getattr(sys, 'frozen', False):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _work_dir() -> str:
+    """可写工作目录：打包后为 exe 所在目录，开发时为脚本目录"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
 
 class ConfigLoader:
     _instance = None
@@ -20,7 +35,8 @@ class ConfigLoader:
     def _load_raw_config(cls) -> Dict[str, Any]:
         """加载原始配置文件（含注释）"""
         try:
-            with open('config.json', 'r', encoding='utf-8') as f:
+            config_path = os.path.join(_base_dir(), 'config.json')
+            with open(config_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except FileNotFoundError:
             raise RuntimeError("配置文件 config.json 未找到")
@@ -43,6 +59,7 @@ class ConfigLoader:
     @classmethod
     def _validate_paths(cls):
         """验证路径配置并创建必要目录"""
+        base = _work_dir()
         required_dirs = [
             cls.get("paths", "screenshots"),
             cls.get("paths", "debug"),
@@ -51,7 +68,7 @@ class ConfigLoader:
         for d in required_dirs:
             if not isinstance(d, str):
                 raise ValueError(f"路径配置必须为字符串类型: {d}")
-            os.makedirs(d, exist_ok=True)
+            os.makedirs(os.path.join(base, d), exist_ok=True)
 
     @classmethod
     def _validate_timing(cls):
@@ -99,14 +116,4 @@ class ConfigLoader:
             raise RuntimeError(f"配置项访问失败: {key_path} ({str(e)})")
 
 # 初始化配置
-try:
-    config = ConfigLoader()
-except RuntimeError as e:
-    print(f"🚨 配置加载失败: {str(e)}")
-    exit(1)
-except ValueError as e:
-    print(f"🔧 配置验证失败: {str(e)}")
-    exit(1)
-except Exception as e:
-    print(f"❌ 未知错误: {str(e)}")
-    exit(1)
+config = ConfigLoader()
