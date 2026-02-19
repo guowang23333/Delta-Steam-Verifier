@@ -69,7 +69,7 @@ def _load_raw_config() -> dict:
 
 
 def _detect_steam_path() -> str:
-    """自动检测 Steam 安装路径：优先注册表，其次常见目录"""
+    """自动检测 Steam 安装路径：优先注册表，其次遍历所有盘符常见目录"""
     # 1. 尝试注册表
     reg_keys = [
         (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamPath"),
@@ -81,23 +81,20 @@ def _detect_steam_path() -> str:
             with winreg.OpenKey(hive, sub_key) as key:
                 val, _ = winreg.QueryValueEx(key, value_name)
                 path = os.path.normpath(val)
-                if os.path.isdir(path):
+                if os.path.isfile(os.path.join(path, "steam.exe")):
                     return path
         except OSError:
             continue
 
-    # 2. 常见安装路径
-    candidates = [
-        os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Steam"),
-        os.path.join(os.environ.get("ProgramFiles", ""), "Steam"),
-        r"D:\Steam",
-        r"E:\Steam",
-        r"D:\Program Files (x86)\Steam",
-        r"E:\Program Files (x86)\Steam",
-    ]
-    for p in candidates:
-        if p and os.path.isfile(os.path.join(p, "steam.exe")):
-            return p
+    # 2. 遍历所有盘符的常见安装路径
+    import string
+    drives = [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
+    sub_dirs = ["Steam", r"Program Files (x86)\Steam", r"Program Files\Steam"]
+    for drive in drives:
+        for sub in sub_dirs:
+            p = os.path.join(drive, sub)
+            if os.path.isfile(os.path.join(p, "steam.exe")):
+                return p
 
     return ""
 
@@ -183,7 +180,8 @@ class SettingsDialog(tk.Toplevel):
         def _auto_detect():
             found = _detect_steam_path()
             if found:
-                path_var.set(found)
+                exe = os.path.join(found, "steam.exe")
+                path_var.set(exe if os.path.isfile(exe) else found)
             else:
                 from tkinter import messagebox
                 messagebox.showwarning("提示", "未能自动检测到 Steam 安装路径", parent=self)
@@ -493,8 +491,8 @@ class App(tk.Tk):
 
     def _sync_accounts(self):
         accounts = [
-            {'username': self.tree.item(i)['values'][0],
-             'password': self.tree.item(i)['values'][1]}
+            {'username': str(self.tree.item(i)['values'][0]),
+             'password': str(self.tree.item(i)['values'][1])}
             for i in self.tree.get_children()
         ]
         save_accounts_to_config(accounts)
@@ -504,8 +502,8 @@ class App(tk.Tk):
     # ---------------------------
     def _start(self):
         accounts = [
-            {'username': self.tree.item(i)['values'][0],
-             'password': self.tree.item(i)['values'][1]}
+            {'username': str(self.tree.item(i)['values'][0]),
+             'password': str(self.tree.item(i)['values'][1])}
             for i in self.tree.get_children()
         ]
         if not accounts:
@@ -529,6 +527,8 @@ class App(tk.Tk):
     def _run_task(self, accounts):
         try:
             import main as core
+            from config_loader import ConfigLoader
+            ConfigLoader.reload()  # 确保读取最新配置
             core._log_callback = self._log
             core._should_stop = lambda: not self._running  # 注入停止检查函数
 

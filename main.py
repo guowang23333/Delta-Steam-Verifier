@@ -87,7 +87,12 @@ def login_steam(username, password):
             raise Exception("用户已停止")
 
         # 通过命令行登录
-        cmd = [config.get("steam", "path"), "-login", username, password]
+        steam_path = config.get("steam", "path")
+        if os.path.isdir(steam_path):
+            steam_path = os.path.join(steam_path, "steam.exe")
+        if not os.path.isfile(steam_path):
+            raise FileNotFoundError(f"Steam 路径不存在: {steam_path}")
+        cmd = [steam_path, "-login", str(username), str(password)]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         log(f"[{datetime.now()}] 正在登录账户: {username}")
 

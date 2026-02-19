@@ -35,7 +35,10 @@ class ConfigLoader:
     def _load_raw_config(cls) -> Dict[str, Any]:
         """加载原始配置文件（含注释）"""
         try:
-            config_path = os.path.join(_base_dir(), 'config.json')
+            # 优先读取可写工作目录（exe 同级），其次读取内嵌资源目录
+            work_path = os.path.join(_work_dir(), 'config.json')
+            base_path = os.path.join(_base_dir(), 'config.json')
+            config_path = work_path if os.path.isfile(work_path) else base_path
             with open(config_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except FileNotFoundError:
