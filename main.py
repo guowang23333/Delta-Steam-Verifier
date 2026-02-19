@@ -14,12 +14,19 @@ from config_loader import config
 
 # UI 可注入日志回调，默认直接 print
 _log_callback = None
+_should_stop = None  # UI 可注入停止检查函数
 
 def log(msg: str):
     if _log_callback:
         _log_callback(msg)
     else:
         print(msg)
+
+def should_stop() -> bool:
+    """检查是否应该停止执行"""
+    if _should_stop:
+        return _should_stop()
+    return False
 
 
 # ---------------------------
@@ -69,9 +76,15 @@ def random_delay():
 def login_steam(username, password):
     """Steam账户登录"""
     try:
+        if should_stop():
+            raise Exception("用户已停止")
+
         # 终止现有Steam进程
         kill_process("steam.exe")
         random_delay()
+
+        if should_stop():
+            raise Exception("用户已停止")
 
         # 通过命令行登录
         cmd = [config.get("steam", "path"), "-login", username, password]
@@ -80,11 +93,14 @@ def login_steam(username, password):
 
         # 等待登录完成
         time.sleep(config.get("timing", "login_delay"))
-        
+
+        if should_stop():
+            raise Exception("用户已停止")
+
         # 检查Steam进程是否运行
         if not any(p.info['name'] == 'steam.exe' for p in psutil.process_iter(['name'])):
             raise Exception("Steam客户端启动失败")
-            
+
     except Exception as e:
         log(f"登录失败: {str(e)}")
         raise
@@ -129,6 +145,9 @@ def handle_eula_agreement():
 def launch_game():
     """启动游戏主流程"""
     try:
+        if should_stop():
+            raise Exception("用户已停止")
+
         # 初始化按钮配置
         button_config = config.get("buttons", "config")
         button_images = {
@@ -147,6 +166,9 @@ def launch_game():
             if not os.path.exists(button_images[btn_type]):
                 raise FileNotFoundError(f"按钮截图缺失: {button_images[btn_type]}")
 
+        if should_stop():
+            raise Exception("用户已停止")
+
         # 启动游戏进程
         subprocess.Popen([
             config.get("steam", "path"),
@@ -164,28 +186,34 @@ def launch_game():
         start_time = time.time()
 
         while time.time() - start_time < timeout:
+            if should_stop():
+                raise Exception("用户已停止")
+
             # 检查游戏进程是否已启动
             if any(p.info['name'].lower() == config.get("steam", "process_name").lower()
                     for p in psutil.process_iter(['name'])):
                 game_started = True
                 break
-            
+
             attempt += 1
             log(f"等待游戏进程启动...（尝试 {attempt}/{max_attempts}）")
-            
+
             if attempt >= max_attempts:
                 log("检测到游戏进程未启动，处理协议")
                 # 处理用户协议
                 agreement_handled = handle_eula_agreement()
                 log(f"协议处理状态: {'成功' if agreement_handled else '未检测到'}")
-                
+
                 # 协议处理后重置计数器并继续检测
                 attempt = 0
                 max_attempts = process_cfg.get("post_agreement_attempts", 5)  # 协议处理后的额外尝试次数
                 log("协议处理完成，继续等待游戏进程启动...")
                 continue
-            
+
             time.sleep(process_cfg["interval"])
+
+        if should_stop():
+            raise Exception("用户已停止")
 
         if not game_started:
             raise Exception(f"进程启动超时（{timeout}秒）")
@@ -193,12 +221,18 @@ def launch_game():
         log("游戏进程启动成功")
         time.sleep(random.uniform(*config.get("timing", "delays", "game_loading")))
 
+        if should_stop():
+            raise Exception("用户已停止")
+
         # 智能点击流程
         def smart_click(btn_type):
             cfg = button_config[btn_type]
             log(f"[{btn_type}] 最大重试次数: {cfg['retries']}")
-            
+
             for attempt in range(cfg["retries"]):
+                if should_stop():
+                    return False
+
                 try:
                     log(f"尝试 {attempt+1}/{cfg['retries']}")
                     location = pyautogui.locateOnScreen(
@@ -207,7 +241,7 @@ def launch_game():
                         grayscale=True,
                         minSearchTime=1 + attempt
                     )
-                    
+
                     if location:
                         center = pyautogui.center(location)
                         pyautogui.moveTo(center, duration=random.uniform(0.5, 1.2))
@@ -229,6 +263,9 @@ def launch_game():
         except Exception as e:
             log(f"可选步骤跳过: {str(e)}")
 
+        if should_stop():
+            raise Exception("用户已停止")
+
         # 最终验证
         log("验证游戏状态...")
         delay_min, delay_max = config.get("timing", "final_validation", "delay_range")
@@ -238,7 +275,7 @@ def launch_game():
 
         if not is_process_running(config.get("steam", "process_name")):
             raise Exception(f"游戏进程 {config.get('steam', 'process_name')} 未运行")
-        
+
         log("游戏启动完成")
         return True
 
@@ -345,7 +382,7 @@ def main():
             login_steam(acc['username'], acc['password'])
             launch_game()
             
-            time.sleep(15)
+            time.sleep(config.get("timing", "login_delay"))
             ban_info = capture_ban_info(acc['username'])
             
             # 记录日志

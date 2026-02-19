@@ -115,5 +115,32 @@ class ConfigLoader:
             key_path = '->'.join(map(str, keys))
             raise RuntimeError(f"配置项访问失败: {key_path} ({str(e)})")
 
+    @classmethod
+    def reload(cls):
+        """重新加载配置文件到内存"""
+        cls._raw_config = cls._load_raw_config()
+        cls.config = cls._filter_comments(cls._raw_config)
+        cls._validate_paths()
+        cls._validate_timing()
+
+    @classmethod
+    def save_full_config(cls, updates: Dict[str, Any]):
+        """将更新写入 config.json 并重新加载（保留注释字段）"""
+        config_path = os.path.join(_work_dir(), 'config.json')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+
+        def _deep_update(base, patch):
+            for k, v in patch.items():
+                if isinstance(v, dict) and isinstance(base.get(k), dict):
+                    _deep_update(base[k], v)
+                else:
+                    base[k] = v
+
+        _deep_update(raw, updates)
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(raw, f, ensure_ascii=False, indent=4)
+        cls.reload()
+
 # 初始化配置
 config = ConfigLoader()
